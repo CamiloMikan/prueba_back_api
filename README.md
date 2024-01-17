@@ -26,7 +26,7 @@ Este proyecto es una aplicación de prueba que implementa un REST API usando Dja
 1. **Aplicar Migraciones:**
   python manage.py migrate
 
-2. **Crear un Superusuario (opcional):**
+2. **Crear un Superusuario**
   python manage.py createsuperuser
 
 ## Ejecutar el Servidor de Desarrollo:

@@ -48,7 +48,6 @@ class MyTokenObtainPairView(TokenObtainPairView):
 
 token_obtain_pair = MyTokenObtainPairView.as_view()
 
-@login_required
 def export_clients_csv(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="clients.csv"'
