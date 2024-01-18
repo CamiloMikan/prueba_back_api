@@ -1,8 +1,8 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from rest_framework.decorators import action,api_view,parser_classes
+from rest_framework.decorators import action,api_view, permission_classes
 from rest_framework.parsers import FileUploadParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated,AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth.models import User
 from django.shortcuts import render
@@ -14,7 +14,9 @@ from .seriealizers import *
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .resources import ClientResource
+from openpyxl import load_workbook
 import csv
+
 
 class JWTAuthenticationMixin:
     authentication_classes = [JWTAuthentication]
@@ -68,45 +70,51 @@ def export_clients_csv(request):
 
     return response
 
+from django.http import JsonResponse
+
+
 @api_view(['POST'])
-@parser_classes([FileUploadParser])
-def import_clients_csv(request):
-    if 'file' not in request.FILES:
-        return Response({"error": "No se proporcionó el archivo CSV"}, status=status.HTTP_400_BAD_REQUEST)
+@permission_classes([AllowAny])
+def import_from_excel(request):
+    if request.method == 'POST':
+        excel_file = request.FILES['pruebas_api']
 
-    serializer = ClientImportSerializer(data=request.data)
+        # Comprueba si el archivo es un archivo Excel
+        if not excel_file.name.endswith('.xlsx'):
+            return JsonResponse({'error': 'El archivo no es de tipo XLSX.'}, status=400)
 
-    if serializer.is_valid():
         try:
-            file = serializer.validated_data['file']
-            resource = ClientResource()
-            dataset = resource.load(file.read().decode('utf-8'), format='csv')
+            wb = load_workbook(excel_file)
+            ws = wb.active
 
-            if dataset.headers:
-                mapping = {
-                    'Documento': 'document',
-                    'Nombre': 'first_name',
-                    'Apellido': 'last_name',
-                    'Email': 'email',
-                    'Contraseña': 'password',
-                }
+            success_count = 0
+            error_count = 0
+            errors = []
 
-                resource.import_data(dataset, dry_run=False, mapping=mapping)
-
-                for row in dataset.dict:
-                    client = Clients(
-                        document=row['Documento'],
-                        first_name=row['Nombre'],
-                        last_name=row['Apellido'],
-                        email=row['Email'],
-                        password=row['Contraseña']
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                document, first_name, last_name, email, password = row
+                try:
+                    Clients.objects.create(
+                        document=document,
+                        first_name=first_name,
+                        last_name=last_name,
+                        email=email,
+                        password=password
                     )
-                    client.save()
+                    success_count += 1
+                except Exception as e:
+                    error_count += 1
+                    errors.append({'row_data': row, 'error_message': str(e)})
 
-                return Response({"message": "Importación exitosa"})
-            else:
-                return Response({"error": "El archivo CSV debe tener encabezados"}, status=status.HTTP_400_BAD_REQUEST)
+            response_data = {
+                'success_count': success_count,
+                'error_count': error_count,
+                'errors': errors
+            }
+
+            return JsonResponse(response_data)
         except Exception as e:
-            return Response({"error": f"Error en la importación: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
-    else:
-        return Response({"error": f"Datos no válidos: {serializer.errors}"}, status=status.HTTP_400_BAD_REQUEST)
+            return JsonResponse({'error': f'Error durante la importación: {str(e)}'}, status=500)
+
+    return JsonResponse({'error': 'Método no permitido.'}, status=405)
+
