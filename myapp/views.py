@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from rest_framework.decorators import action
+from rest_framework.decorators import action,api_view,parser_classes
+from rest_framework.parsers import FileUploadParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth.models import User
@@ -50,7 +51,7 @@ token_obtain_pair = MyTokenObtainPairView.as_view()
 
 def export_clients_csv(request):
     response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="clients.csv"'
+    response['Content-Disposition'] = "attachment; filename='clients.csv'"
 
     # Obtener todos los clientes con la cantidad de facturas relacionadas
     clients = Clients.objects.annotate(num_bills=models.Count('bills'))
@@ -67,10 +68,45 @@ def export_clients_csv(request):
 
     return response
 
+@api_view(['POST'])
+@parser_classes([FileUploadParser])
 def import_clients_csv(request):
-    if request.method == 'POST':
-        resource = ClientResource()
-        dataset = resource.load(request.FILES['file'])
-        resource.import_data(dataset, dry_run=False)  # dry_run=False para realizar la importación real
+    if 'file' not in request.FILES:
+        return Response({"error": "No se proporcionó el archivo CSV"}, status=status.HTTP_400_BAD_REQUEST)
 
-    return render(request, 'import.html')
+    serializer = ClientImportSerializer(data=request.data)
+
+    if serializer.is_valid():
+        try:
+            file = serializer.validated_data['file']
+            resource = ClientResource()
+            dataset = resource.load(file.read().decode('utf-8'), format='csv')
+
+            if dataset.headers:
+                mapping = {
+                    'Documento': 'document',
+                    'Nombre': 'first_name',
+                    'Apellido': 'last_name',
+                    'Email': 'email',
+                    'Contraseña': 'password',
+                }
+
+                resource.import_data(dataset, dry_run=False, mapping=mapping)
+
+                for row in dataset.dict:
+                    client = Clients(
+                        document=row['Documento'],
+                        first_name=row['Nombre'],
+                        last_name=row['Apellido'],
+                        email=row['Email'],
+                        password=row['Contraseña']
+                    )
+                    client.save()
+
+                return Response({"message": "Importación exitosa"})
+            else:
+                return Response({"error": "El archivo CSV debe tener encabezados"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": f"Error en la importación: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        return Response({"error": f"Datos no válidos: {serializer.errors}"}, status=status.HTTP_400_BAD_REQUEST)
