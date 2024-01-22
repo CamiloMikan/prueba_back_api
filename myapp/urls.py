@@ -10,9 +10,9 @@ router.register(r'products', ProductViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('users/register/', UserViewSet.as_view({'post': 'register_user'}), name='register-user'),
-    path('token/', TokenObtainPairView.as_view(), name='token-obtain-pair'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
+    path('register/', ClientRegistrationView.as_view(), name='client-registration'),
+    path('login/', MyTokenObtainPairView.as_view(), name='token-obtain-pair'),
+    path('login/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
     path('export/clients/csv/', export_clients_csv, name='export-clients-csv'),
     path('import/clients/xlsx/', import_from_excel, name='import-from-excel'),
 ]

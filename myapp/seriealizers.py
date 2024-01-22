@@ -7,6 +7,7 @@ class ClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Clients
         fields = '__all__'
+        extra_kwargs = {'password': {'write_only': True}}
 
 class BillSerializer(serializers.ModelSerializer):
     class Meta:
