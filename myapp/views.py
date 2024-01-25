@@ -1,15 +1,12 @@
-from rest_framework import viewsets, status,generics, permissions
+from rest_framework import viewsets, status,generics
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated,AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.http import HttpResponse
-from django.contrib.auth.decorators import login_required
 from .models import *
 from .seriealizers import *
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.permissions import AllowAny, IsAuthenticated
 from openpyxl import load_workbook
 import csv
 
@@ -31,30 +28,22 @@ class ProductViewSet(JWTAuthenticationMixin, viewsets.ModelViewSet):
     serializer_class = ProductSerializer
 
 class ClientRegistrationView(generics.CreateAPIView):
-    queryset = Clients.objects.all()
-    serializer_class = ClientSerializer
-    permission_classes = [permissions.AllowAny]
+    queryset = User.objects.all()
+    serializer_class = RegisterSerializer
 
-    def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        client = serializer.save()
-
-        refresh = RefreshToken.for_user(client)
-        access_token = str(refresh.access_token)
-
-        return Response({
-            'access_token': access_token,
-            'client_id': client.id,
-            'client_name': client.full_name(),
-        }, status=status.HTTP_201_CREATED)
+    @action(detail=False, methods=['post'])
+    def register_user(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response({'status': 'Usuario registrado con éxito'}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
-class MyTokenObtainPairView(TokenObtainPairView):
-    serializer_class = LoginSerializer
-
-token_obtain_pair = MyTokenObtainPairView.as_view()
+class EmailTokenObtainPairView(TokenObtainPairView):
+    serializer_class = TokenObtainPairSerializer
+    
 
 def export_clients_csv(request,):
     response = HttpResponse(content_type='text/csv')
