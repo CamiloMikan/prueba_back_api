@@ -14,5 +14,5 @@ urlpatterns = [
     path('login/', EmailTokenObtainPairView.as_view(), name='token-obtain-pair'),
     path('login/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
     path('export/clients/csv/', export_clients_csv, name='export-clients-csv'),
-    path('import/clients/xlsx/', import_from_excel, name='import-from-excel'),
+    path('import/clients/csv/', import_from_csv, name='import-from-csv'),
 ]

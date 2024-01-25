@@ -7,7 +7,7 @@ from django.http import HttpResponse
 from .models import *
 from .seriealizers import *
 from rest_framework_simplejwt.views import TokenObtainPairView
-from openpyxl import load_workbook
+from django.http import JsonResponse
 import csv
 
 
@@ -44,7 +44,8 @@ class ClientRegistrationView(generics.CreateAPIView):
 class EmailTokenObtainPairView(TokenObtainPairView):
     serializer_class = TokenObtainPairSerializer
     
-
+    
+    
 def export_clients_csv(request,):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = "attachment; filename= clients.csv"
@@ -64,30 +65,37 @@ def export_clients_csv(request,):
 
     return response
 
-from django.http import JsonResponse
 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def import_from_excel(request):
+def import_from_csv(request):
     if request.method == 'POST':
-        excel_file = request.FILES['pruebas_api']
+        csv_file = request.FILES.get('pruebas_api')
 
-        # Comprueba si el archivo es un archivo Excel
-        if not excel_file.name.endswith('.xlsx'):
-            return JsonResponse({'error': 'El archivo no es de tipo XLSX.'}, status=400)
+        # Comprueba si el archivo es un archivo CSV
+        if not csv_file.name.endswith('.csv'):
+            return JsonResponse({'error': 'El archivo no es de tipo CSV.'}, status=400)
 
         try:
-            wb = load_workbook(excel_file)
-            ws = wb.active
-
             success_count = 0
             error_count = 0
             errors = []
 
-            for row in ws.iter_rows(min_row=2, values_only=True):
-                document, first_name, last_name, email, password = row
+            # Convertir el contenido del InMemoryUploadedFile a texto
+            csv_content = csv_file.read().decode('utf-8').splitlines()
+
+            # Crear el lector CSV
+            csv_reader = csv.reader(csv_content, delimiter=';')
+
+            # Saltar la primera fila si es una cabecera
+            header = next(csv_reader, None)
+
+            for row in csv_reader:
                 try:
+                    # Tratar de desempaquetar cinco valores
+                    document, first_name, last_name, email, password = row[:5]
+
                     Clients.objects.create(
                         document=document,
                         first_name=first_name,
@@ -96,7 +104,8 @@ def import_from_excel(request):
                         password=password
                     )
                     success_count += 1
-                except Exception as e:
+                except (ValueError, IndexError) as e:
+                    # Manejar errores si no hay suficientes valores en la fila
                     error_count += 1
                     errors.append({'row_data': row, 'error_message': str(e)})
 
@@ -111,4 +120,3 @@ def import_from_excel(request):
             return JsonResponse({'error': f'Error durante la importación: {str(e)}'}, status=500)
 
     return JsonResponse({'error': 'Método no permitido.'}, status=405)
-
